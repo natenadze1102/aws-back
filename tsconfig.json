@@ -1,10 +1,12 @@
 {
   "compilerOptions": {
+    // Compile output goes here
+    "outDir": "dist",
+    // So we can import from .js modules easily
+    "esModuleInterop": true,
+
     "target": "ES2020",
     "module": "commonjs",
-    "outDir": "dist",
-    "rootDir": "src",
-    "esModuleInterop": true,
     "lib": ["es2020", "dom"],
     "declaration": true,
     "strict": true,
@@ -22,6 +24,5 @@
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"]
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "cdk.out"]
+  "exclude": ["node_modules", "cdk.out", "dist"]
 }

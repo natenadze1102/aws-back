@@ -82,13 +82,13 @@ export class SdkInfraStack extends Stack {
     const getProductsListLambda = new Function(this, 'getProductsListLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'getProductsList.handler',
-      code: Code.fromAsset('services/product-service'),
+      code: Code.fromAsset('dist/services/product-service'),
     });
 
     const getProductsByIdLambda = new Function(this, 'getProductsByIdLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'getProductsById.handler',
-      code: Code.fromAsset('services/product-service'),
+      code: Code.fromAsset('dist/services/product-service'),
     });
 
     // 8. Create the API Gateway
