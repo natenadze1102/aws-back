@@ -1,0 +1,64 @@
+openapi: 3.0.0
+info:
+  title: Product Service
+  version: 1.0.0
+  description: API for retrieving product data
+
+paths:
+  /products:
+    get:
+      summary: Retrieve a list of products
+      operationId: getProductsList
+      responses:
+        '200':
+          description: A list of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products'
+
+  /products/{productId}:
+    get:
+      summary: Retrieve a product by ID
+      operationId: getProductsById
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          description: The ID (or name) of the product
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested product
+          content:
+            application/json:
+              schema:
+                $ref: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products'
+        '404':
+          description: Product not found
+
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '12345'
+        title:
+          type: string
+          example: 'Product Title'
+        description:
+          type: string
+          example: 'A short product description.'
+        price:
+          type: number
+          example: 19.99
+      required:
+        - id
+        - title
+        - description
+        - price
