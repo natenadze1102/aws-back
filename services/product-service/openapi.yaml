@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Product Service
   version: 1.0.0
-  description: API for retrieving product data
+  description: API for retrieving and creating product data
 
 paths:
   /products:
@@ -17,7 +17,41 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products'
+                  $ref: '#/components/schemas/Product'
+        '500':
+          description: Internal Server Error
+      x-amazon-apigateway-integration:
+        # Optionally define integration details here if needed
+        # Otherwise, remove this key
+        uri: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products'
+        httpMethod: 'GET'
+        type: 'http_proxy'
+
+    post:
+      summary: Create a new product
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '200':
+          description: The newly created product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Invalid input (e.g., missing or invalid fields)
+        '500':
+          description: Internal Server Error
+      x-amazon-apigateway-integration:
+        # Adjust or remove as needed
+        uri: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products'
+        httpMethod: 'POST'
+        type: 'http_proxy'
 
   /products/{productId}:
     get:
@@ -27,7 +61,7 @@ paths:
         - name: productId
           in: path
           required: true
-          description: The ID (or name) of the product
+          description: The ID of the product
           schema:
             type: string
       responses:
@@ -36,9 +70,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products'
+                $ref: '#/components/schemas/Product'
         '404':
           description: Product not found
+        '500':
+          description: Internal Server Error
+      x-amazon-apigateway-integration:
+        uri: 'https://qeonfvidg3.execute-api.eu-central-1.amazonaws.com/prod/products/{productId}'
+        httpMethod: 'GET'
+        type: 'http_proxy'
 
 components:
   schemas:
@@ -57,6 +97,9 @@ components:
         price:
           type: number
           example: 19.99
+        count:
+          type: integer
+          example: 5
       required:
         - id
         - title
