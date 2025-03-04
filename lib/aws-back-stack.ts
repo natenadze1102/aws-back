@@ -14,6 +14,12 @@ export class SdkInfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    /*
+     * ==========================
+     * WEBSITE HOSTING SECTION
+     * ==========================
+     */
+
     // 1. Create a PRIVATE S3 Bucket for website hosting
     const websiteBucket = new Bucket(this, 'Task2Bucket', {
       // websiteIndexDocument: 'index.html',
@@ -64,6 +70,26 @@ export class SdkInfraStack extends Stack {
       ],
     });
 
+    // 7. Deploy the contents of the "dist" folder from your React build to the S3 bucket
+    new BucketDeployment(this, 'DeployWebsite', {
+      sources: [Source.asset('../aws-front/dist')],
+      destinationBucket: websiteBucket,
+      distribution,
+      distributionPaths: ['/*'], // Invalidate CloudFront cache after deployment
+    });
+
+    // 6. (Optional) Output the CloudFront Distribution Domain
+    new CfnOutput(this, 'CloudFrontURL', {
+      value: distribution.distributionDomainName,
+      description: 'The domain name of the CloudFront distribution',
+    });
+
+    /*
+     * ==========================
+     * DYNAMODB TABLES
+     * ==========================
+     */
+
     // 5. Create products table
     const productsTable = new Table(this, 'ProductsTable', {
       tableName: 'products',
@@ -78,19 +104,11 @@ export class SdkInfraStack extends Stack {
       billingMode: BillingMode.PAY_PER_REQUEST,
     });
 
-    // 7. Deploy the contents of the "dist" folder from your React build to the S3 bucket
-    new BucketDeployment(this, 'DeployWebsite', {
-      sources: [Source.asset('../aws-front/dist')],
-      destinationBucket: websiteBucket,
-      distribution,
-      distributionPaths: ['/*'], // Invalidate CloudFront cache after deployment
-    });
-
-    // 6. (Optional) Output the CloudFront Distribution Domain
-    new CfnOutput(this, 'CloudFrontURL', {
-      value: distribution.distributionDomainName,
-      description: 'The domain name of the CloudFront distribution',
-    });
+    /*
+     * ==========================
+     * PRODUCT SERVICE LAMBDAS
+     * ==========================
+     */
 
     // 7. Create the Lambda functions for "getProductsList", "getProductsById" , "createProduct"
     const getProductsListLambda = new Function(this, 'getProductsListLambda', {
@@ -130,9 +148,15 @@ export class SdkInfraStack extends Stack {
     productsTable.grantWriteData(createProductLambda);
     stocksTable.grantWriteData(createProductLambda);
 
+    /*
+     * ==========================
+     * PRODUCT SERVICE API GATEWAY
+     * ==========================
+     */
     // 8. Create the API Gateway
     const api = new RestApi(this, 'ProductServiceApi', {
       restApiName: 'Product Service',
+
       defaultCorsPreflightOptions: {
         allowOrigins: Cors.ALL_ORIGINS, // or ['https://your-frontend.com']
         allowMethods: Cors.ALL_METHODS, // or [ 'GET', 'POST', ... ]
@@ -149,5 +173,40 @@ export class SdkInfraStack extends Stack {
     // 10. Add "/products/{productId}" resource
     const singleProductResource = products.addResource('{productId}');
     singleProductResource.addMethod('GET', new LambdaIntegration(getProductsByIdLambda));
+
+    /*
+     * ==========================
+     * IMPORT SERVICE
+     * ==========================
+     *
+     * If you want to do Task 5 in the same stack, you can define the S3 bucket,
+     * import-lambdas, and an /import endpoint here.
+     */
+
+    const importBucket = Bucket.fromBucketName(this, 'ImportBucket', 'rs-school-test-upload');
+
+    // 2. Create the importProductsFile Lambda
+    const importProductsFileLambda = new Function(this, 'ImportProductsFileLambda', {
+      runtime: Runtime.NODEJS_22_X,
+      handler: 'importProductsFile.handler',
+      code: Code.fromAsset('dist/services/import-service'), // match your build output location
+
+      environment: {
+        IMPORT_BUCKET_NAME: 'rs-school-test-upload', // or importBucket.bucketName if you created it in code
+      },
+    });
+
+    // 3. Grant the Lambda permission to PUT objects to the bucket
+    //    This is necessary to generate a pre-signed URL for PUT.
+    importBucket.grantPut(importProductsFileLambda);
+
+    // 4. add /import GET
+    const importResource = api.root.addResource('import');
+    importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
+      // Optionally require 'name' query param at API Gateway level
+      requestParameters: {
+        'method.request.querystring.name': false, // or 'true' if you want to mark it "required"
+      },
+    });
   }
 }
