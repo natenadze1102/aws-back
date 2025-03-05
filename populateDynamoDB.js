@@ -2,7 +2,6 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 
-// Initialize DynamoDB Client
 const client = new DynamoDBClient({ region: 'eu-central-1' });
 const docClient = DynamoDBDocumentClient.from(client);
 
@@ -24,7 +23,7 @@ const products = [
 
 const stocks = products.map((product) => ({
   product_id: product.id,
-  count: Math.floor(Math.random() * 100), // Random stock count
+  count: Math.floor(Math.random() * 100),
 }));
 
 // Function to insert data
@@ -56,5 +55,4 @@ const insertData = async () => {
   }
 };
 
-// Execute the function
 insertData();
