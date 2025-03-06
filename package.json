@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "test": "jest --coverage",
+    "test": "jest",
     "cdk": "cdk",
     "deploy": "npm run build && cdk deploy"
   },
@@ -19,10 +19,11 @@
     "aws-cdk": "2.178.2",
     "aws-sdk-client-mock": "^4.1.0",
     "esbuild": "^0.25.0",
-    "jest": "^29.7.0",
+    "jest": "^29.5.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "~5.6.3"
+    "typescript": "~5.6.3",
+    "aws-sdk-mock": "^5.8.0"
   },
   "dependencies": {
     "@aws-cdk/aws-apigateway": "^1.203.0",
@@ -33,6 +34,7 @@
     "@aws-sdk/s3-request-presigner": "^3.758.0",
     "aws-cdk-lib": "2.178.2",
     "constructs": "^10.0.0",
+    "csv-parser": "^3.2.0",
     "uuid": "^11.1.0"
   }
 }

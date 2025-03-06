@@ -1,6 +1,6 @@
 import { Stack, StackProps, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { BlockPublicAccess, Bucket, BucketPolicy } from 'aws-cdk-lib/aws-s3';
+import { BlockPublicAccess, Bucket, BucketPolicy, EventType } from 'aws-cdk-lib/aws-s3';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
@@ -9,6 +9,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Cors, LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import { Code, Runtime, Function } from 'aws-cdk-lib/aws-lambda';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { S3EventSource, S3EventSourceV2 } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export class SdkInfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -185,7 +187,7 @@ export class SdkInfraStack extends Stack {
 
     const importBucket = Bucket.fromBucketName(this, 'ImportBucket', 'rs-school-test-upload');
 
-    // 2. Create the importProductsFile Lambda
+    // 11. Create the importProductsFile Lambda
     const importProductsFileLambda = new Function(this, 'ImportProductsFileLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'importProductsFile.handler',
@@ -196,11 +198,31 @@ export class SdkInfraStack extends Stack {
       },
     });
 
-    // 3. Grant the Lambda permission to PUT objects to the bucket
+    //12. Create the importFileParser Lambda function
+    const importFileParserLambda = new NodejsFunction(this, 'ImportFileParserLambda', {
+      runtime: Runtime.NODEJS_22_X,
+      entry: 'services/import-service/importFileParser.ts',
+      handler: 'handler',
+      // code: Code.fromAsset('dist/services/import-service'), // Adjust path as needed
+      environment: {
+        IMPORT_BUCKET_NAME: 'rs-school-test-upload',
+      },
+    });
+    // Configure the Lambda to trigger when an object is created in the "uploaded/" folder
+    importFileParserLambda.addEventSource(
+      new S3EventSourceV2(importBucket, {
+        events: [EventType.OBJECT_CREATED],
+        filters: [{ prefix: 'uploaded/' }], // Trigger only for files in "uploaded/"
+      })
+    );
+
+    // 13. Grant the Lambda permission to PUT objects to the bucket
     //    This is necessary to generate a pre-signed URL for PUT.
     importBucket.grantPut(importProductsFileLambda);
+    importBucket.grantRead(importFileParserLambda);
+    importBucket.grantReadWrite(importFileParserLambda);
 
-    // 4. add /import GET
+    // 14. add /import GET
     const importResource = api.root.addResource('import');
     importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
       // Optionally require 'name' query param at API Gateway level
