@@ -1,7 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
-import { handler } from '../createProduct'; // Adjust path
+
 import { DynamoDBDocumentClient, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { handler } from '../lambdas/createProduct';
 
 // Mock AWS SDK
 jest.mock('@aws-sdk/lib-dynamodb', () => ({

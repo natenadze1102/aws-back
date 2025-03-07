@@ -1,8 +1,9 @@
 // get-products-by-id.test.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
-import { handler } from '../getProductsById';
+
 import { mockClient } from 'aws-sdk-client-mock';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { handler } from '../lambdas/createProduct';
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 

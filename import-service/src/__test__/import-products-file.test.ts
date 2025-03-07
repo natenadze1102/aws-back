@@ -1,7 +1,7 @@
 import { mockClient } from 'aws-sdk-client-mock';
 import { S3Client } from '@aws-sdk/client-s3';
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
-import { handler as importProductsFile } from '../importProductsFile';
+import { handler as importProductsFile } from '../lambdas/importProductsFile';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3Mock = mockClient(S3Client);

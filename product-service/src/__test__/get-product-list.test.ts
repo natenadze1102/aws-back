@@ -1,6 +1,6 @@
 // get-products-list.test.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
-import { handler } from '../getProductsList';
+import { handler } from '../lambdas/getProductsList';
 import { mockClient } from 'aws-sdk-client-mock';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
