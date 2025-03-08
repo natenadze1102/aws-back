@@ -20,9 +20,6 @@ export class ImportServiceStack extends Stack {
      * Task 5
      */
 
-    // 1. Reference or Create the S3 bucket
-    //    If the bucket is already created in the AWS Console or by another stack,
-    //    you can "import" it using Bucket.fromBucketName or fromBucketArn
     const importBucket = Bucket.fromBucketName(this, 'ImportBucket', 'rs-school-test-upload');
 
     // 2. Create the `importProductsFile` Lambda
@@ -73,7 +70,7 @@ export class ImportServiceStack extends Stack {
     const importResource = this.importApi.root.addResource('import');
     importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
       requestParameters: {
-        // 'method.request.querystring.name': true // if you want it required
+        // 'method.request.querystring.name': true // we dont need to make it requered
         'method.request.querystring.name': false,
       },
     });

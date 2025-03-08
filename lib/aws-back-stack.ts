@@ -180,9 +180,6 @@ export class SdkInfraStack extends Stack {
      * ==========================
      * IMPORT SERVICE
      * ==========================
-     *
-     * If you want to do Task 5 in the same stack, you can define the S3 bucket,
-     * import-lambdas, and an /import endpoint here.
      */
 
     const importBucket = Bucket.fromBucketName(this, 'ImportBucket', 'rs-school-test-upload');
@@ -191,10 +188,10 @@ export class SdkInfraStack extends Stack {
     const importProductsFileLambda = new Function(this, 'ImportProductsFileLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'importProductsFile.handler',
-      code: Code.fromAsset('dist/services/import-service'), // match your build output location
+      code: Code.fromAsset('dist/services/import-service'),
 
       environment: {
-        IMPORT_BUCKET_NAME: 'rs-school-test-upload', // or importBucket.bucketName if you created it in code
+        IMPORT_BUCKET_NAME: 'rs-school-test-upload',
       },
     });
 
@@ -203,7 +200,7 @@ export class SdkInfraStack extends Stack {
       runtime: Runtime.NODEJS_22_X,
       entry: 'services/import-service/importFileParser.ts',
       handler: 'handler',
-      // code: Code.fromAsset('dist/services/import-service'), // Adjust path as needed
+
       environment: {
         IMPORT_BUCKET_NAME: 'rs-school-test-upload',
       },
@@ -225,9 +222,8 @@ export class SdkInfraStack extends Stack {
     // 14. add /import GET
     const importResource = api.root.addResource('import');
     importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
-      // Optionally require 'name' query param at API Gateway level
       requestParameters: {
-        'method.request.querystring.name': false, // or 'true' if you want to mark it "required"
+        'method.request.querystring.name': false, // or 'true' if we want to mark it "required"
       },
     });
   }

@@ -10,7 +10,7 @@ import { Code, Runtime, Function as LambdaFunction } from 'aws-cdk-lib/aws-lambd
 import { Table, AttributeType, BillingMode } from 'aws-cdk-lib/aws-dynamodb';
 
 export class ProductServiceStack extends Stack {
-  public readonly api: RestApi; // Optionally export the API if you want to share it with the import-service
+  public readonly api: RestApi;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
