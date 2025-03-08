@@ -6,8 +6,9 @@ import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { OriginAccessIdentity } from 'aws-cdk-lib/aws-cloudfront';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
+import { Cors, LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import { Code, Runtime, Function } from 'aws-cdk-lib/aws-lambda';
+import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 
 export class SdkInfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -63,7 +64,21 @@ export class SdkInfraStack extends Stack {
       ],
     });
 
-    // 5. Deploy the contents of the "dist" folder from your React build to the S3 bucket
+    // 5. Create products table
+    const productsTable = new Table(this, 'ProductsTable', {
+      tableName: 'products',
+      partitionKey: { name: 'id', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+    });
+
+    // 6. Create stocks table
+    const stocksTable = new Table(this, 'StocksTable', {
+      tableName: 'stocks',
+      partitionKey: { name: 'product_id', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+    });
+
+    // 7. Deploy the contents of the "dist" folder from your React build to the S3 bucket
     new BucketDeployment(this, 'DeployWebsite', {
       sources: [Source.asset('../aws-front/dist')],
       destinationBucket: websiteBucket,
@@ -77,31 +92,62 @@ export class SdkInfraStack extends Stack {
       description: 'The domain name of the CloudFront distribution',
     });
 
-    // NEW CODE: LAMBDA & API GATEWAY
-    // 7. Create the Lambda functions for "getProductsList" and "getProductsById"
+    // 7. Create the Lambda functions for "getProductsList", "getProductsById" , "createProduct"
     const getProductsListLambda = new Function(this, 'getProductsListLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'getProductsList.handler',
       code: Code.fromAsset('dist/services/product-service'),
+      environment: {
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        STOCKS_TABLE_NAME: stocksTable.tableName,
+      },
     });
 
-    const getProductsByIdLambda = new Function(this, 'getProductsByIdLambda', {
+    const getProductsByIdLambda = new Function(this, 'GetProductsByIdLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'getProductsById.handler',
       code: Code.fromAsset('dist/services/product-service'),
+      environment: {
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        STOCKS_TABLE_NAME: stocksTable.tableName,
+      },
     });
+
+    const createProductLambda = new Function(this, 'CreateProductLambda', {
+      runtime: Runtime.NODEJS_22_X,
+      handler: 'createProduct.handler',
+      code: Code.fromAsset('dist/services/product-service'),
+      environment: {
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        STOCKS_TABLE_NAME: stocksTable.tableName,
+      },
+    });
+
+    productsTable.grantReadData(getProductsListLambda);
+    stocksTable.grantReadData(getProductsListLambda);
+    productsTable.grantReadData(getProductsByIdLambda);
+    stocksTable.grantReadData(getProductsByIdLambda);
+    productsTable.grantWriteData(createProductLambda);
+    stocksTable.grantWriteData(createProductLambda);
 
     // 8. Create the API Gateway
     const api = new RestApi(this, 'ProductServiceApi', {
       restApiName: 'Product Service',
+      defaultCorsPreflightOptions: {
+        allowOrigins: Cors.ALL_ORIGINS, // or ['https://your-frontend.com']
+        allowMethods: Cors.ALL_METHODS, // or [ 'GET', 'POST', ... ]
+        allowHeaders: ['Content-Type', 'Authorization'],
+        allowCredentials: true,
+      },
     });
 
     // 9. Add "/products" resource
     const products = api.root.addResource('products');
     products.addMethod('GET', new LambdaIntegration(getProductsListLambda));
+    products.addMethod('POST', new LambdaIntegration(createProductLambda));
 
     // 10. Add "/products/{productId}" resource
-    const productIdResource = products.addResource('{productId}');
-    productIdResource.addMethod('GET', new LambdaIntegration(getProductsByIdLambda));
+    const singleProductResource = products.addResource('{productId}');
+    singleProductResource.addMethod('GET', new LambdaIntegration(getProductsByIdLambda));
   }
 }
