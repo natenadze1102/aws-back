@@ -5,7 +5,6 @@ import { Function as LambdaFunction, Runtime, Code } from 'aws-cdk-lib/aws-lambd
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { S3EventSourceProps, S3EventSourceV2 } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { RestApi, LambdaIntegration, Cors } from 'aws-cdk-lib/aws-apigateway';
-import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class ImportServiceStack extends Stack {
   // If you want your Import Service to have its own API Gateway, keep a reference here
