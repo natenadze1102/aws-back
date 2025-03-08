@@ -11,7 +11,7 @@ This repository contains the backend microservices for the project. The backend 
 ## Project Structure
 
 ```plaintext
-aws-back/
+cdk-ts/
 ├── authorization_service   # Authentication/authorization microservice repository
 ├── import_service          # Service for importing product data
 ├── product_service         # Service for product data management
