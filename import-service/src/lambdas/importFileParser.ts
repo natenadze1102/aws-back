@@ -17,7 +17,7 @@ export const handler = async (event: S3Event) => {
     // Process each record in the S3 event
     for (const record of event.Records) {
       const bucketName = record.s3.bucket.name;
-      const key = record.s3.object.key; // e.g., "uploaded/myFile.csv"
+      const key = record.s3.object.key;
       console.log(`Processing file: ${key} from bucket: ${bucketName}`);
 
       // Download the CSV file from S3
