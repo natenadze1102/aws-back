@@ -1,18 +1,17 @@
-import { Stack, StackProps, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, StackProps, RemovalPolicy, CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { BlockPublicAccess, Bucket, BucketPolicy, EventType } from 'aws-cdk-lib/aws-s3';
-import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
+import { BlockPublicAccess, Bucket, BucketPolicy } from 'aws-cdk-lib/aws-s3';
+import { Distribution, OriginAccessIdentity } from 'aws-cdk-lib/aws-cloudfront';
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
-import { OriginAccessIdentity } from 'aws-cdk-lib/aws-cloudfront';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Cors, LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
-import { Code, Runtime, Function } from 'aws-cdk-lib/aws-lambda';
-import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
-import { S3EventSource, S3EventSourceV2 } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Code, Runtime, Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
+import { Table, AttributeType, BillingMode } from 'aws-cdk-lib/aws-dynamodb';
 
-export class SdkInfraStack extends Stack {
+export class ProductServiceStack extends Stack {
+  public readonly api: RestApi;
+
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
@@ -24,11 +23,9 @@ export class SdkInfraStack extends Stack {
 
     // 1. Create a PRIVATE S3 Bucket for website hosting
     const websiteBucket = new Bucket(this, 'Task2Bucket', {
-      // websiteIndexDocument: 'index.html',
-      // websiteErrorDocument: 'index.html', because of this ot says Static Website that is not deisred behavior
-      publicReadAccess: false, // Ensure bucket is private
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL, // Block all public access
-      removalPolicy: RemovalPolicy.RETAIN, // Change as needed
+      publicReadAccess: false,
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: RemovalPolicy.RETAIN,
     });
 
     // 2. Create CloudFront Origin Access Identity (OAI)
@@ -57,7 +54,6 @@ export class SdkInfraStack extends Stack {
         }),
       },
       defaultRootObject: 'index.html',
-
       errorResponses: [
         {
           httpStatus: 403,
@@ -72,12 +68,12 @@ export class SdkInfraStack extends Stack {
       ],
     });
 
-    // 7. Deploy the contents of the "dist" folder from your React build to the S3 bucket
+    // 5. Deploy the contents of the "dist" folder from your React build to the S3 bucket
     new BucketDeployment(this, 'DeployWebsite', {
       sources: [Source.asset('../aws-front/dist')],
       destinationBucket: websiteBucket,
       distribution,
-      distributionPaths: ['/*'], // Invalidate CloudFront cache after deployment
+      distributionPaths: ['/*'],
     });
 
     // 6. (Optional) Output the CloudFront Distribution Domain
@@ -92,14 +88,14 @@ export class SdkInfraStack extends Stack {
      * ==========================
      */
 
-    // 5. Create products table
+    // 7. Create products table
     const productsTable = new Table(this, 'ProductsTable', {
       tableName: 'products',
       partitionKey: { name: 'id', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
     });
 
-    // 6. Create stocks table
+    // 8. Create stocks table
     const stocksTable = new Table(this, 'StocksTable', {
       tableName: 'stocks',
       partitionKey: { name: 'product_id', type: AttributeType.STRING },
@@ -112,9 +108,9 @@ export class SdkInfraStack extends Stack {
      * ==========================
      */
 
-    // 7. Create the Lambda functions for "getProductsList", "getProductsById" , "createProduct"
-    const getProductsListLambda = new Function(this, 'getProductsListLambda', {
-      runtime: Runtime.NODEJS_22_X,
+    // 9. Create the Lambda functions for "getProductsList", "getProductsById" , "createProduct"
+    const getProductsListLambda = new LambdaFunction(this, 'getProductsListLambda', {
+      runtime: Runtime.NODEJS_18_X,
       handler: 'getProductsList.handler',
       code: Code.fromAsset('dist/services/product-service'),
       environment: {
@@ -123,8 +119,8 @@ export class SdkInfraStack extends Stack {
       },
     });
 
-    const getProductsByIdLambda = new Function(this, 'GetProductsByIdLambda', {
-      runtime: Runtime.NODEJS_22_X,
+    const getProductsByIdLambda = new LambdaFunction(this, 'GetProductsByIdLambda', {
+      runtime: Runtime.NODEJS_18_X,
       handler: 'getProductsById.handler',
       code: Code.fromAsset('dist/services/product-service'),
       environment: {
@@ -133,8 +129,8 @@ export class SdkInfraStack extends Stack {
       },
     });
 
-    const createProductLambda = new Function(this, 'CreateProductLambda', {
-      runtime: Runtime.NODEJS_22_X,
+    const createProductLambda = new LambdaFunction(this, 'CreateProductLambda', {
+      runtime: Runtime.NODEJS_18_X,
       handler: 'createProduct.handler',
       code: Code.fromAsset('dist/services/product-service'),
       environment: {
@@ -143,10 +139,13 @@ export class SdkInfraStack extends Stack {
       },
     });
 
+    // Permissions
     productsTable.grantReadData(getProductsListLambda);
     stocksTable.grantReadData(getProductsListLambda);
+
     productsTable.grantReadData(getProductsByIdLambda);
     stocksTable.grantReadData(getProductsByIdLambda);
+
     productsTable.grantWriteData(createProductLambda);
     stocksTable.grantWriteData(createProductLambda);
 
@@ -155,76 +154,24 @@ export class SdkInfraStack extends Stack {
      * PRODUCT SERVICE API GATEWAY
      * ==========================
      */
-    // 8. Create the API Gateway
-    const api = new RestApi(this, 'ProductServiceApi', {
+    // 10. Create the API Gateway
+    this.api = new RestApi(this, 'ProductServiceApi', {
       restApiName: 'Product Service',
-
       defaultCorsPreflightOptions: {
-        allowOrigins: Cors.ALL_ORIGINS, // or ['https://your-frontend.com']
-        allowMethods: Cors.ALL_METHODS, // or [ 'GET', 'POST', ... ]
+        allowOrigins: Cors.ALL_ORIGINS,
+        allowMethods: Cors.ALL_METHODS,
         allowHeaders: ['Content-Type', 'Authorization'],
         allowCredentials: true,
       },
     });
 
-    // 9. Add "/products" resource
-    const products = api.root.addResource('products');
+    // 11. Add "/products" resource
+    const products = this.api.root.addResource('products');
     products.addMethod('GET', new LambdaIntegration(getProductsListLambda));
     products.addMethod('POST', new LambdaIntegration(createProductLambda));
 
-    // 10. Add "/products/{productId}" resource
+    // 12. Add "/products/{productId}" resource
     const singleProductResource = products.addResource('{productId}');
     singleProductResource.addMethod('GET', new LambdaIntegration(getProductsByIdLambda));
-
-    /*
-     * ==========================
-     * IMPORT SERVICE
-     * ==========================
-     */
-
-    const importBucket = Bucket.fromBucketName(this, 'ImportBucket', 'rs-school-test-upload');
-
-    // 11. Create the importProductsFile Lambda
-    const importProductsFileLambda = new Function(this, 'ImportProductsFileLambda', {
-      runtime: Runtime.NODEJS_22_X,
-      handler: 'importProductsFile.handler',
-      code: Code.fromAsset('dist/services/import-service'),
-
-      environment: {
-        IMPORT_BUCKET_NAME: 'rs-school-test-upload',
-      },
-    });
-
-    //12. Create the importFileParser Lambda function
-    const importFileParserLambda = new NodejsFunction(this, 'ImportFileParserLambda', {
-      runtime: Runtime.NODEJS_22_X,
-      entry: 'services/import-service/importFileParser.ts',
-      handler: 'handler',
-
-      environment: {
-        IMPORT_BUCKET_NAME: 'rs-school-test-upload',
-      },
-    });
-    // Configure the Lambda to trigger when an object is created in the "uploaded/" folder
-    importFileParserLambda.addEventSource(
-      new S3EventSourceV2(importBucket, {
-        events: [EventType.OBJECT_CREATED],
-        filters: [{ prefix: 'uploaded/' }], // Trigger only for files in "uploaded/"
-      })
-    );
-
-    // 13. Grant the Lambda permission to PUT objects to the bucket
-    //    This is necessary to generate a pre-signed URL for PUT.
-    importBucket.grantPut(importProductsFileLambda);
-    importBucket.grantRead(importFileParserLambda);
-    importBucket.grantReadWrite(importFileParserLambda);
-
-    // 14. add /import GET
-    const importResource = api.root.addResource('import');
-    importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
-      requestParameters: {
-        'method.request.querystring.name': false, // or 'true' if we want to mark it "required"
-      },
-    });
   }
 }
