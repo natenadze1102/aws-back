@@ -116,7 +116,7 @@ export class SdkInfraStack extends Stack {
     const getProductsListLambda = new Function(this, 'getProductsListLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'getProductsList.handler',
-      code: Code.fromAsset('dist/services/product-service'),
+      code: Code.fromAsset('dist/product-service/src/lambdas'),
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
@@ -126,7 +126,7 @@ export class SdkInfraStack extends Stack {
     const getProductsByIdLambda = new Function(this, 'GetProductsByIdLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'getProductsById.handler',
-      code: Code.fromAsset('dist/services/product-service'),
+      code: Code.fromAsset('dist/product-service/src/lambdas'),
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
@@ -136,7 +136,7 @@ export class SdkInfraStack extends Stack {
     const createProductLambda = new Function(this, 'CreateProductLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'createProduct.handler',
-      code: Code.fromAsset('dist/services/product-service'),
+      code: Code.fromAsset('dist/product-service/src/lambdas'),
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
@@ -188,7 +188,7 @@ export class SdkInfraStack extends Stack {
     const importProductsFileLambda = new Function(this, 'ImportProductsFileLambda', {
       runtime: Runtime.NODEJS_22_X,
       handler: 'importProductsFile.handler',
-      code: Code.fromAsset('dist/services/import-service'),
+      code: Code.fromAsset('dist/import-service/src/lambdas'),
 
       environment: {
         IMPORT_BUCKET_NAME: 'rs-school-test-upload',
@@ -198,7 +198,7 @@ export class SdkInfraStack extends Stack {
     //12. Create the importFileParser Lambda function
     const importFileParserLambda = new NodejsFunction(this, 'ImportFileParserLambda', {
       runtime: Runtime.NODEJS_22_X,
-      entry: 'services/import-service/importFileParser.ts',
+      entry: 'import-service/src/lambdas/importFileParser.ts',
       handler: 'handler',
 
       environment: {

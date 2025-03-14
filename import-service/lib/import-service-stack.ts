@@ -5,57 +5,62 @@ import { Function as LambdaFunction, Runtime, Code } from 'aws-cdk-lib/aws-lambd
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { S3EventSourceProps, S3EventSourceV2 } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { RestApi, LambdaIntegration, Cors } from 'aws-cdk-lib/aws-apigateway';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { Fn } from 'aws-cdk-lib';
 
 export class ImportServiceStack extends Stack {
-  // If you want your Import Service to have its own API Gateway, keep a reference here
   public readonly importApi: RestApi;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    /*
-     * ==========================
-     * IMPORT SERVICE
-     * ==========================
-     * Task 5
-     */
-
+    // Импортируем бакет
     const importBucket = Bucket.fromBucketName(this, 'ImportBucket', 'rs-school-test-upload');
 
-    // 2. Create the `importProductsFile` Lambda
+    // Импортируем очередь SQS с использованием fromQueueAttributes
+    const catalogItemsQueue = sqs.Queue.fromQueueAttributes(this, 'ImportedCatalogItemsQueue', {
+      queueArn: Fn.importValue('CatalogItemsQueueArn'),
+      queueUrl: Fn.importValue('CatalogItemsQueueUrl'),
+    });
+
+    // 2. Создаём Lambda importProductsFile
     const importProductsFileLambda = new LambdaFunction(this, 'ImportProductsFileLambda', {
       runtime: Runtime.NODEJS_18_X,
       handler: 'importProductsFile.handler',
-      code: Code.fromAsset('dist/services/import-service'), // adjust path as needed
+      code: Code.fromAsset('dist/import-service/src/lambdas'),
       environment: {
         IMPORT_BUCKET_NAME: importBucket.bucketName,
+        CATALOG_ITEMS_QUEUE_URL: catalogItemsQueue.queueUrl,
       },
     });
 
-    // 3. Create the `importFileParser` Lambda
+    // 3. Создаём Lambda importFileParser
     const importFileParserLambda = new NodejsFunction(this, 'ImportFileParserLambda', {
       runtime: Runtime.NODEJS_18_X,
-      entry: 'services/import-service/importFileParser.ts', // your .ts entry file
+      entry: 'import-service/src/lambdas/importFileParser.ts',
       handler: 'handler',
       environment: {
         IMPORT_BUCKET_NAME: importBucket.bucketName,
+        CATALOG_ITEMS_QUEUE_URL: catalogItemsQueue.queueUrl,
       },
     });
 
-    // 4. Configure S3 to trigger the `importFileParser` Lambda when objects are created in "uploaded/"
+    // 4. Настраиваем S3-триггер для Lambda importFileParser
     importFileParserLambda.addEventSource(
       new S3EventSourceV2(importBucket, <S3EventSourceProps>{
         events: [EventType.OBJECT_CREATED],
-        filters: [{ prefix: 'uploaded/' }], // Only triggers if object is inside "uploaded/"
+        filters: [{ prefix: 'uploaded/' }],
       })
     );
 
-    // 5. Grant necessary permissions
+    // 5. Грантим необходимые разрешения
     importBucket.grantPut(importProductsFileLambda);
     importBucket.grantRead(importFileParserLambda);
     importBucket.grantReadWrite(importFileParserLambda);
 
-    // 6. Create an API Gateway for the Import Service (or you can skip if you want a single gateway)
+    catalogItemsQueue.grantSendMessages(importFileParserLambda);
+
+    // 6. Создаем API Gateway
     this.importApi = new RestApi(this, 'ImportServiceApi', {
       restApiName: 'Import Service',
       defaultCorsPreflightOptions: {
@@ -66,11 +71,10 @@ export class ImportServiceStack extends Stack {
       },
     });
 
-    // 7. Add GET /import
+    // 7. Добавляем ресурс /import
     const importResource = this.importApi.root.addResource('import');
     importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
       requestParameters: {
-        // 'method.request.querystring.name': true // we dont need to make it requered
         'method.request.querystring.name': false,
       },
     });

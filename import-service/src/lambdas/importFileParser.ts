@@ -7,8 +7,10 @@ import {
 } from '@aws-sdk/client-s3';
 import csvParser from 'csv-parser';
 import { Readable } from 'stream';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'eu-central-1' });
+const sqsClient = new SQSClient({ region: process.env.AWS_REGION || 'eu-central-1' });
 
 export const handler = async (event: S3Event) => {
   console.log('S3 Event:', JSON.stringify(event));
@@ -17,7 +19,7 @@ export const handler = async (event: S3Event) => {
     // Process each record in the S3 event
     for (const record of event.Records) {
       const bucketName = record.s3.bucket.name;
-      const key = record.s3.object.key;
+      const key = record.s3.object.key; // e.g., "uploaded/myFile.csv"
       console.log(`Processing file: ${key} from bucket: ${bucketName}`);
 
       // Download the CSV file from S3
@@ -35,9 +37,16 @@ export const handler = async (event: S3Event) => {
       await new Promise<void>((resolve, reject) => {
         stream
           .pipe(csvParser())
-          .on('data', (data) => {
+          .on('data', async (data) => {
             // Log each record to CloudWatch
             console.log('CSV Record:', data);
+
+            await sqsClient.send(
+              new SendMessageCommand({
+                QueueUrl: process.env.CATALOG_ITEMS_QUEUE_URL, // Set via environment variables
+                MessageBody: JSON.stringify(data),
+              })
+            );
           })
           .on('end', async () => {
             console.log(`Finished processing file: ${key}`);
