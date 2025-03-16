@@ -23,7 +23,6 @@ export class ImportServiceStack extends Stack {
       queueUrl: Fn.importValue('CatalogItemsQueueUrl'),
     });
 
-    // 2. Создаём Lambda importProductsFile
     const importProductsFileLambda = new LambdaFunction(this, 'ImportProductsFileLambda', {
       runtime: Runtime.NODEJS_18_X,
       handler: 'importProductsFile.handler',
@@ -34,7 +33,6 @@ export class ImportServiceStack extends Stack {
       },
     });
 
-    // 3. Создаём Lambda importFileParser
     const importFileParserLambda = new NodejsFunction(this, 'ImportFileParserLambda', {
       runtime: Runtime.NODEJS_18_X,
       entry: 'import-service/src/lambdas/importFileParser.ts',
@@ -45,7 +43,6 @@ export class ImportServiceStack extends Stack {
       },
     });
 
-    // 4. Настраиваем S3-триггер для Lambda importFileParser
     importFileParserLambda.addEventSource(
       new S3EventSourceV2(importBucket, <S3EventSourceProps>{
         events: [EventType.OBJECT_CREATED],
@@ -53,14 +50,12 @@ export class ImportServiceStack extends Stack {
       })
     );
 
-    // 5. Грантим необходимые разрешения
     importBucket.grantPut(importProductsFileLambda);
     importBucket.grantRead(importFileParserLambda);
     importBucket.grantReadWrite(importFileParserLambda);
 
     catalogItemsQueue.grantSendMessages(importFileParserLambda);
 
-    // 6. Создаем API Gateway
     this.importApi = new RestApi(this, 'ImportServiceApi', {
       restApiName: 'Import Service',
       defaultCorsPreflightOptions: {
@@ -71,7 +66,6 @@ export class ImportServiceStack extends Stack {
       },
     });
 
-    // 7. Добавляем ресурс /import
     const importResource = this.importApi.root.addResource('import');
     importResource.addMethod('GET', new LambdaIntegration(importProductsFileLambda), {
       requestParameters: {
