@@ -19,7 +19,7 @@ export const handler = async (event: S3Event) => {
     // Process each record in the S3 event
     for (const record of event.Records) {
       const bucketName = record.s3.bucket.name;
-      const key = record.s3.object.key; // e.g., "uploaded/myFile.csv"
+      const key = record.s3.object.key;
       console.log(`Processing file: ${key} from bucket: ${bucketName}`);
 
       // Download the CSV file from S3
@@ -38,36 +38,43 @@ export const handler = async (event: S3Event) => {
         stream
           .pipe(csvParser())
           .on('data', async (data) => {
-            // Log each record to CloudWatch
-            console.log('CSV Record:', data);
-
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: process.env.CATALOG_ITEMS_QUEUE_URL, // Set via environment variables
-                MessageBody: JSON.stringify(data),
-              })
-            );
+            try {
+              console.log('CSV Record:', data);
+              await sqsClient.send(
+                new SendMessageCommand({
+                  QueueUrl: process.env.CATALOG_ITEMS_QUEUE_URL, // Set via environment variables
+                  MessageBody: JSON.stringify(data),
+                })
+              );
+              console.log('Record sent to SQS');
+            } catch (err) {
+              console.error('Error sending message to SQS:', err);
+              // Здесь можно выбрать, завершать ли обработку или продолжать для остальных строк
+            }
           })
           .on('end', async () => {
             console.log(`Finished processing file: ${key}`);
 
             // (Optional Extra) Move file from "uploaded/" to "parsed/" folder
             const destinationKey = key.replace('uploaded/', 'parsed/');
-            // Copy the file to the new location
-            await s3Client.send(
-              new CopyObjectCommand({
-                Bucket: bucketName,
-                CopySource: `${bucketName}/${key}`,
-                Key: destinationKey,
-              })
-            );
-            // Delete the original file from the "uploaded/" folder
-            await s3Client.send(
-              new DeleteObjectCommand({
-                Bucket: bucketName,
-                Key: key,
-              })
-            );
+            try {
+              await s3Client.send(
+                new CopyObjectCommand({
+                  Bucket: bucketName,
+                  CopySource: `${bucketName}/${key}`,
+                  Key: destinationKey,
+                })
+              );
+              await s3Client.send(
+                new DeleteObjectCommand({
+                  Bucket: bucketName,
+                  Key: key,
+                })
+              );
+            } catch (copyErr) {
+              console.error('Error moving file:', copyErr);
+              reject(copyErr);
+            }
             resolve();
           })
           .on('error', (err) => {
