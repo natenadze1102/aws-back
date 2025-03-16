@@ -2,7 +2,7 @@ import { SQSEvent } from 'aws-lambda';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 
-// Helper to generate an ID if product has none
+// Функция для генерации ID, если его нет
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 export const handler = async (event: SQSEvent) => {
@@ -12,16 +12,22 @@ export const handler = async (event: SQSEvent) => {
   const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'eu-central-1' });
 
   let processedCount = 0;
-  let minPrice = Infinity; // We'll track the minimum price across all products
+  let minPrice = Infinity;
+  const processedProducts: Array<{
+    title: string;
+    description: string;
+    price: number;
+    count: number;
+  }> = [];
 
-  // Process each message
+  // Обрабатываем каждое сообщение из очереди
   for (const record of event.Records) {
     try {
       const product = JSON.parse(record.body);
 
-      // Prepare the DynamoDB item
+      // Подготовка параметров для записи в DynamoDB
       const params = {
-        TableName: process.env.PRODUCTS_TABLE_NAME!, // set via environment
+        TableName: process.env.PRODUCTS_TABLE_NAME!,
         Item: {
           id: { S: product.id || generateId() },
           title: { S: product.title },
@@ -31,30 +37,43 @@ export const handler = async (event: SQSEvent) => {
         },
       };
 
-      // Write item to DynamoDB
+      // Запись товара в DynamoDB
       await dynamoClient.send(new PutItemCommand(params));
       processedCount++;
 
-      // Track the lowest price seen
-      if (typeof product.price === 'number') {
-        minPrice = Math.min(minPrice, product.price);
+      // Отслеживаем минимальную цену
+      const price = typeof product.price === 'number' ? product.price : parseFloat(product.price);
+      if (!isNaN(price)) {
+        minPrice = Math.min(minPrice, price);
       }
+
+      // Добавляем детали товара в массив для уведомления
+      processedProducts.push({
+        title: product.title,
+        description: product.description,
+        price: price,
+        count: Number(product.count),
+      });
     } catch (error) {
       console.error('Error processing record:', record, error);
-      // Optionally throw to re-queue or handle in DLQ
+      // При необходимости можно выбросить ошибку, чтобы сообщение вернулось в очередь
     }
   }
 
   const priceCategory = minPrice < 20 ? 'low' : 'high';
 
-  // Send ONE SNS notification with the batch summary
+  // Формируем сообщение с подробной информацией о продуктах
+  const messageBody = {
+    summary: `Successfully processed ${processedCount} product(s)`,
+    products: processedProducts,
+  };
+
+  // Отправляем уведомление SNS с собранной информацией
   try {
     const publishParams = {
-      TopicArn: process.env.CREATE_PRODUCT_TOPIC_ARN!, // environment variable
+      TopicArn: process.env.CREATE_PRODUCT_TOPIC_ARN!,
       Subject: 'Products Imported',
-      Message: `Successfully processed ${processedCount} product(s)`,
-
-      // Add an attribute "priceCategory" for SNS Filter Policies
+      Message: JSON.stringify(messageBody, null, 2),
       MessageAttributes: {
         priceCategory: {
           DataType: 'String',
