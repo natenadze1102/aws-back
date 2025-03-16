@@ -45,9 +45,6 @@ export const handler = async (event: SQSEvent) => {
     }
   }
 
-  // Decide on a single "priceCategory" for the entire batch
-  // e.g., if minPrice < 20 => "low", otherwise => "high"
-  // If no products found (processedCount=0), minPrice is still Infinity => "high" by default
   const priceCategory = minPrice < 20 ? 'low' : 'high';
 
   // Send ONE SNS notification with the batch summary
