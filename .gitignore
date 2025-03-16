@@ -1,10 +1,10 @@
-dist/
-coverage/
 !jest.config.js
 *.d.ts
 node_modules
+coverage/
 
 # CDK asset staging directory
 .cdk.staging
 cdk.out
 dist/
+
