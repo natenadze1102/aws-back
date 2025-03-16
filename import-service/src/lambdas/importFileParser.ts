@@ -5,9 +5,9 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import csvParser from 'csv-parser';
 import { Readable } from 'stream';
-import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'eu-central-1' });
 const sqsClient = new SQSClient({ region: process.env.AWS_REGION || 'eu-central-1' });
@@ -33,31 +33,39 @@ export const handler = async (event: S3Event) => {
       // Get the body as a Readable stream
       const stream = getObjectResponse.Body as Readable;
 
-      // Parse CSV file using csv-parser
+      // Collect promises for sending SQS messages
+      const sendPromises: Promise<any>[] = [];
+
+      // Create a promise that resolves when the stream finishes processing
       await new Promise<void>((resolve, reject) => {
         stream
           .pipe(csvParser())
-          .on('data', async (data) => {
-            try {
-              console.log('CSV Record:', data);
-              await sqsClient.send(
+          .on('data', (data) => {
+            console.log('CSV Record:', data);
+            // Push the SQS send promise into the array
+            const promise = sqsClient
+              .send(
                 new SendMessageCommand({
-                  QueueUrl: process.env.CATALOG_ITEMS_QUEUE_URL, // Set via environment variables
+                  QueueUrl: process.env.CATALOG_ITEMS_QUEUE_URL!, // Set via environment variables
                   MessageBody: JSON.stringify(data),
                 })
-              );
-              console.log('Record sent to SQS');
-            } catch (err) {
-              console.error('Error sending message to SQS:', err);
-              // Здесь можно выбрать, завершать ли обработку или продолжать для остальных строк
-            }
+              )
+              .then(() => {
+                console.log('Record sent to SQS');
+              })
+              .catch((err) => {
+                console.error('Error sending message to SQS:', err);
+              });
+            sendPromises.push(promise);
           })
           .on('end', async () => {
-            console.log(`Finished processing file: ${key}`);
-
-            // (Optional Extra) Move file from "uploaded/" to "parsed/" folder
-            const destinationKey = key.replace('uploaded/', 'parsed/');
             try {
+              // Wait for all SQS messages to be sent
+              await Promise.all(sendPromises);
+              console.log(`Finished sending all records for file: ${key}`);
+
+              // (Optional Extra) Move file from "uploaded/" to "parsed/" folder
+              const destinationKey = key.replace('uploaded/', 'parsed/');
               await s3Client.send(
                 new CopyObjectCommand({
                   Bucket: bucketName,
@@ -71,11 +79,11 @@ export const handler = async (event: S3Event) => {
                   Key: key,
                 })
               );
+              resolve();
             } catch (copyErr) {
               console.error('Error moving file:', copyErr);
               reject(copyErr);
             }
-            resolve();
           })
           .on('error', (err) => {
             console.error('Error while parsing CSV:', err);
