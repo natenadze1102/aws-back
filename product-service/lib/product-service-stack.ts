@@ -1,4 +1,4 @@
-import { Stack, StackProps, RemovalPolicy, CfnOutput } from 'aws-cdk-lib';
+import { Stack, StackProps, RemovalPolicy, CfnOutput, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { BlockPublicAccess, Bucket, BucketPolicy } from 'aws-cdk-lib/aws-s3';
 import { Distribution, OriginAccessIdentity } from 'aws-cdk-lib/aws-cloudfront';
@@ -8,6 +8,12 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Cors, LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import { Code, Runtime, Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { Table, AttributeType, BillingMode } from 'aws-cdk-lib/aws-dynamodb';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+
+//SQS - SNS
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 export class ProductServiceStack extends Stack {
   public readonly api: RestApi;
@@ -112,7 +118,7 @@ export class ProductServiceStack extends Stack {
     const getProductsListLambda = new LambdaFunction(this, 'getProductsListLambda', {
       runtime: Runtime.NODEJS_18_X,
       handler: 'getProductsList.handler',
-      code: Code.fromAsset('dist/services/product-service'),
+      code: Code.fromAsset('dist/product-service/src/lambdas'),
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
@@ -122,7 +128,7 @@ export class ProductServiceStack extends Stack {
     const getProductsByIdLambda = new LambdaFunction(this, 'GetProductsByIdLambda', {
       runtime: Runtime.NODEJS_18_X,
       handler: 'getProductsById.handler',
-      code: Code.fromAsset('dist/services/product-service'),
+      code: Code.fromAsset('dist/product-service/src/lambdas'),
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
@@ -132,7 +138,7 @@ export class ProductServiceStack extends Stack {
     const createProductLambda = new LambdaFunction(this, 'CreateProductLambda', {
       runtime: Runtime.NODEJS_18_X,
       handler: 'createProduct.handler',
-      code: Code.fromAsset('dist/services/product-service'),
+      code: Code.fromAsset('dist/product-service/src/lambdas'),
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
@@ -173,5 +179,63 @@ export class ProductServiceStack extends Stack {
     // 12. Add "/products/{productId}" resource
     const singleProductResource = products.addResource('{productId}');
     singleProductResource.addMethod('GET', new LambdaIntegration(getProductsByIdLambda));
+
+    //13. Create SQS Queue
+    const catalogItemsQueue = new sqs.Queue(this, 'CatalogItemsQueue', {
+      queueName: 'catalogItemsQueue',
+      visibilityTimeout: Duration.seconds(30), // adjust as needed
+    });
+
+    const createProductTopic = new sns.Topic(this, 'CreateProductTopic', {
+      topicName: 'createProductTopic',
+    });
+
+    createProductTopic.addSubscription(
+      new subscriptions.EmailSubscription('natenadze1102@gmail.com')
+    );
+
+    // 2) High-price subscription
+    createProductTopic.addSubscription(
+      new subscriptions.EmailSubscription('katerina.chugigidze@gmail.com', {
+        filterPolicy: {
+          priceCategory: sns.SubscriptionFilter.stringFilter({
+            allowlist: ['high'],
+          }),
+        },
+      })
+    );
+
+    // (Optional) A no-filter subscription that gets all messages
+    createProductTopic.addSubscription(new subscriptions.EmailSubscription('loranat57@gmail.com'));
+
+    const catalogBatchProcessLambda = new LambdaFunction(this, 'CatalogBatchProcessLambda', {
+      runtime: Runtime.NODEJS_18_X,
+      handler: 'catalogBatchProcess.handler',
+      code: Code.fromAsset('dist/product-service/src/lambdas'), // adjust as needed
+      environment: {
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        CREATE_PRODUCT_TOPIC_ARN: createProductTopic.topicArn,
+      },
+    });
+
+    productsTable.grantWriteData(catalogBatchProcessLambda);
+
+    catalogItemsQueue.grantConsumeMessages(catalogBatchProcessLambda);
+    new CfnOutput(this, 'CatalogItemsQueueArnOutput', {
+      value: catalogItemsQueue.queueArn,
+      exportName: 'CatalogItemsQueueArn',
+    });
+
+    new CfnOutput(this, 'CatalogItemsQueueUrlOutput', {
+      value: catalogItemsQueue.queueUrl,
+      exportName: 'CatalogItemsQueueUrl',
+    });
+
+    createProductTopic.grantPublish(catalogBatchProcessLambda);
+    catalogBatchProcessLambda.addEventSource(
+      new SqsEventSource(catalogItemsQueue, {
+        batchSize: 5,
+      })
+    );
   }
 }
