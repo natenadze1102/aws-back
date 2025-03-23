@@ -26,56 +26,59 @@ export const handler = async (
 ): Promise<APIGatewayAuthorizerResult> => {
   console.log('Token Authorizer event:', JSON.stringify(event));
 
+  // Default principal ID for denied requests
+  const principalId = 'user';
+
   try {
     if (!event.authorizationToken) {
-      // Return 401 Unauthorized if Authorization header is not provided
-      throw new Error('Unauthorized'); // API Gateway will convert this to 401
+      console.log('No authorization token provided');
+      // Important: Return Deny policy instead of throwing an error
+      return generatePolicy(principalId, event.methodArn, 'Deny');
     }
 
     const token = event.authorizationToken; // e.g., "Basic YWxhZGRpbjpvcGVuc2VzYW1l"
     const [authType, encodedCreds] = token.split(' ');
+
     if (authType !== 'Basic' || !encodedCreds) {
-      // Return 401 Unauthorized if token format is invalid
-      throw new Error('Unauthorized'); // API Gateway will convert this to 401
+      console.log('Invalid token format');
+      // Important: Return Deny policy instead of throwing an error
+      return generatePolicy(principalId, event.methodArn, 'Deny');
     }
 
     try {
-      // Try to decode the base64 string - will throw an error if it's invalid
       const decoded = Buffer.from(encodedCreds, 'base64').toString('utf-8');
+      console.log('Decoded credentials format:', decoded);
 
-      // Check if the decoded string contains a colon (username:password format)
       if (!decoded.includes(':')) {
-        throw new Error('Forbidden'); // Malformed credentials
+        console.log('Malformed credentials - no colon');
+        return generatePolicy(principalId, event.methodArn, 'Deny');
       }
 
       const [login, password] = decoded.split(':');
+      console.log(`Login: ${login}, checking against env vars`);
 
       // Look up the password from environment variables
       const storedPassword = process.env[login.toUpperCase()];
+
       if (!storedPassword) {
-        // Return 403 Forbidden if username doesn't exist
-        throw new Error('Forbidden'); // API Gateway will convert this to 403
+        console.log(`No stored password found for ${login.toUpperCase()}`);
+        return generatePolicy(principalId, event.methodArn, 'Deny');
       }
 
       if (storedPassword !== password) {
-        // Return 403 Forbidden if password is incorrect
-        throw new Error('Forbidden'); // API Gateway will convert this to 403
+        console.log('Password mismatch');
+        return generatePolicy(principalId, event.methodArn, 'Deny');
       }
 
+      console.log('Authentication successful');
       return generatePolicy(login, event.methodArn, 'Allow');
     } catch (decodeError) {
       console.error('Error decoding credentials:', decodeError);
-      throw new Error('Forbidden'); // Invalid base64 or other format issues
+      return generatePolicy(principalId, event.methodArn, 'Deny');
     }
   } catch (error) {
-    console.error('Error in authorizer:', error);
-    // If the error message is 'Unauthorized', it will result in a 401
-    // If the error message is 'Forbidden', it will result in a 403
-    // For any other error, we'll default to 'Unauthorized'
-    if (error instanceof Error) {
-      throw error; // Re-throw the original error with its message
-    } else {
-      throw new Error('Unauthorized'); // Default to 401 for unknown errors
-    }
+    console.error('Unexpected error in authorizer:', error);
+    // Important: Always return a policy, never throw
+    return generatePolicy(principalId, event.methodArn, 'Deny');
   }
 };
