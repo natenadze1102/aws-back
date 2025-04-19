@@ -48,7 +48,7 @@ describe('catalogBatchProcess Lambda', () => {
           md5OfBody: '',
           eventSource: 'aws:sqs',
           eventSourceARN: '',
-          awsRegion: 'us-east-1',
+          awsRegion: 'eu-central-1',
         } as SQSRecord,
         {
           messageId: '2',
@@ -59,7 +59,7 @@ describe('catalogBatchProcess Lambda', () => {
           md5OfBody: '',
           eventSource: 'aws:sqs',
           eventSourceARN: '',
-          awsRegion: 'us-east-1',
+          awsRegion: 'eu-central-1',
         } as SQSRecord,
       ],
     };
@@ -113,7 +113,7 @@ describe('catalogBatchProcess Lambda', () => {
           md5OfBody: '',
           eventSource: 'aws:sqs',
           eventSourceARN: '',
-          awsRegion: 'us-east-1',
+          awsRegion: 'eu-central-1',
         } as SQSRecord,
         {
           messageId: '2',
@@ -124,7 +124,7 @@ describe('catalogBatchProcess Lambda', () => {
           md5OfBody: '',
           eventSource: 'aws:sqs',
           eventSourceARN: '',
-          awsRegion: 'us-east-1',
+          awsRegion: 'eu-central-1',
         } as SQSRecord,
       ],
     };
